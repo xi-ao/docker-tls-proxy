@@ -9,6 +9,8 @@
 : "${SERVER_NAME:=_}"
 : "${UPSTREAM_HOST:=localhost}"
 : "${UPSTREAM_PORT:=80}"
+: "${BACKEND_TYPE:=http}"
+: "${FORWARD_HEADERS:=false}"
 
 # create a self-signed certificate if needed
 if [ "$SELF_SIGNED" = 'true' ]; then
@@ -37,9 +39,13 @@ openssl x509 -in /etc/nginx/cert.pem -text -noout
 # nginx re-configuration
 echo '> reconfigure nginx'
 [ "$ENABLE_HTTP2" = 'true' ] && http2=' http2'
-sed -i "s/server localhost:80/server $UPSTREAM_HOST:$UPSTREAM_PORT/" /etc/nginx/conf.d/02-https.conf
+sed -i "s/server localhost:\d\{2,3\}/server $UPSTREAM_HOST:$UPSTREAM_PORT/" /etc/nginx/conf.d/02-https.conf
 sed -i "s/listen 443 ssl/listen $LISTEN_PORT ssl$http2/" /etc/nginx/conf.d/02-https.conf
 sed -i "s/server_name _/server_name $SERVER_NAME/" /etc/nginx/conf.d/02-https.conf
+
+if [ "$BACKEND_TYPE" = 'https' ]; then
+  sed -i "s#proxy_pass http://backend;#proxy_pass https://backend_tls;#" /etc/nginx/conf.d/02-https.conf
+fi
 
 if [ "$FORCE_HTTPS" = 'true' ]; then
   echo '>> force https'
@@ -71,6 +77,16 @@ EOF
       proxy_set_header Connection "Upgrade";
       # This allows the ability for the execute shell window to remain open for up to 15 minutes. Without this parameter, the default is 1 minute and will automatically close.
       proxy_read_timeout 900s;
+EOF
+  sed -i "/proxy_pass/r $tmpf" /etc/nginx/conf.d/02-https.conf
+  rm -f "$tmpf"
+elif [ "$FORWARD_HEADERS" = 'true' ]; then
+  tmpf=$(mktemp)
+  cat <<'EOF'> "$tmpf"
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Port $server_port;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 EOF
   sed -i "/proxy_pass/r $tmpf" /etc/nginx/conf.d/02-https.conf
   rm -f "$tmpf"
