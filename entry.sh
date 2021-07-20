@@ -69,10 +69,6 @@ EOF
   tmpf=$(mktemp)
   cat <<'EOF'> "$tmpf"
       proxy_http_version 1.1;
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_set_header X-Forwarded-Port $server_port;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection "Upgrade";
       # This allows the ability for the execute shell window to remain open for up to 15 minutes. Without this parameter, the default is 1 minute and will automatically close.
@@ -80,16 +76,16 @@ EOF
 EOF
   sed -i "/proxy_pass/r $tmpf" /etc/nginx/conf.d/02-https.conf
   rm -f "$tmpf"
-elif [ "$FORWARD_HEADERS" = 'true' ]; then
+fi
+
+if [ "$FORWARD_HEADERS" = 'true' ]; then
   tmpf=$(mktemp)
-  cat <<'EOF'> "$tmpf"
+  cat <<'EOF'> "/etc/nginx/conf.d/05-forward-headers.conf"
       proxy_set_header Host $host;
       proxy_set_header X-Forwarded-Proto $scheme;
       proxy_set_header X-Forwarded-Port $server_port;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 EOF
-  sed -i "/proxy_pass/r $tmpf" /etc/nginx/conf.d/02-https.conf
-  rm -f "$tmpf"
 fi
 
 echo '--/etc/nginx/nginx.conf--'
